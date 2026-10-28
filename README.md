@@ -39,6 +39,9 @@
  - unlocker.exe -[game] -EnableMobileUI -.......
  - DLL inject 
  - unlocker.exe -[game] -LoadLib [path]
+ - Custom DPI scale, the same concept as Windows display scaling (1.5 = 150%), stored as "CustomDPIScale" in hoyofps_config.ini
+ - The command line value has priority over the config file
+ - unlocker.exe -[game] -DPIscale 1.5
 
 ## Inject
  - Now must be unlocked by inject 

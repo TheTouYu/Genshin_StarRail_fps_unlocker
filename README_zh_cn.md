@@ -34,6 +34,9 @@
  - DLL注入，使用前确保来源可靠性
  - unlocker.exe -[游戏] -loadlib [绝对路径]
  - unlocker.exe -Genshin -EnableMobileUI -loadlib C:\\Folder\\plug.dll -[游戏参数...]
+ - 自定义DPI缩放，与Windows显示缩放比例的概念一致(1.5 = 150%)，对应配置文件hoyofps_config.ini里的CustomDPIScale
+ - 命令行参数优先于配置文件里的值
+ - unlocker.exe -Genshin -dpiscale 1.5
 
 ### 默认热键           PS:按键要按一次改一次，不是长按
 - **END** 开/关

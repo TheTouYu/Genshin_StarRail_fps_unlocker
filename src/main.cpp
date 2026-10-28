@@ -16,6 +16,7 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <stdlib.h>
 
 #include <Windows.h>
 #include <TlHelp32.h>
@@ -37,6 +38,7 @@ uint32_t Target_set_60 = 1000;
 uint32_t Target_set_30 = 60;
 uint32_t PowerSave_target = 10;
 float Custom_DPI_Scale = 0;
+float CommandLine_DPI_Scale = 0;    //-dpiscale from command line, 0 means not set
 bool isGenshin = 1;
 bool Use_mobile_UI = 0;
 bool _main_state = 1;
@@ -49,6 +51,12 @@ bool AutoExit = 0;
 HWND _console_HWND = 0;
 BYTE ConfigPriorityClass = 1;
 uint32_t GamePriorityClass = NORMAL_PRIORITY_CLASS;
+
+//The command line DPI scale has priority over the config file
+static float Get_DPI_Scale()
+{
+    return (CommandLine_DPI_Scale > 0) ? CommandLine_DPI_Scale : Custom_DPI_Scale;
+}
 
 
 typedef struct hooked_func_struct
@@ -1304,6 +1312,7 @@ static bool Init_Game_boot_arg(Boot_arg* arg)
         wchar_t boot_starrail[] = L"-hksr";
         wchar_t loadLib[] = L"-loadlib";
         wchar_t Use_Mobile_UI[] = L"-enablemobileui";
+        wchar_t dpiScale[] = L"-dpiscale";
         wstring* temparg = NewWstring(0x1000);
         *temparg = argvW[1];
         towlower0((wchar_t*)temparg->c_str());
@@ -1340,7 +1349,7 @@ static bool Init_Game_boot_arg(Boot_arg* arg)
         }
         else
         {
-            Show_Error_Msg(L"参数错误 \nArguments error ( unlocker.exe -[game] -[game argv] ..... ) \n");
+            Show_Error_Msg(L"参数错误 \nArguments error ( unlocker.exe -[game] [-dpiscale <scale>] -[game argv] ..... ) \n");
             return 0;
         }
         if (argNum > _game_argc_start)
@@ -1362,6 +1371,25 @@ static bool Init_Game_boot_arg(Boot_arg* arg)
         }
         for (int i = _game_argc_start; i < argNum; i++)
         {
+            *temparg = argvW[i];
+            towlower0((wchar_t*)temparg->c_str());
+            if (*temparg == dpiScale)
+            {
+                wchar_t* endptr = 0;
+                float scale = 0;
+                if (argNum > i + 1)
+                {
+                    scale = (float)wcstod(argvW[i + 1], &endptr);
+                }
+                if (argNum <= i + 1 || endptr == argvW[i + 1] || *endptr != 0 || scale <= 0)
+                {
+                    Show_Error_Msg(L"-dpiscale 参数错误 \nBad -dpiscale value ( unlocker.exe -[game] -dpiscale 1.5 ... ) \n");
+                    return 0;
+                }
+                CommandLine_DPI_Scale = scale;
+                i++;    //The value belongs to the unlocker, do not pass it to the game
+                continue;
+            }
             CommandLine += argvW[i];
             CommandLine += L" ";
         }
@@ -1550,7 +1578,7 @@ static uint64_t inject_patch(HANDLE Tar_handle, LPVOID Tar_ModBase, LPVOID _ptr_
             {
                 0xB8, 0x60, 0x00, 0x00, 0x00, 0x66, 0x0F, 0x6E, 0xC0, 0xC3, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC, 0xCC
             };
-            float dpiscale_n = Custom_DPI_Scale * 96;
+            float dpiscale_n = Get_DPI_Scale() * 96;
             *(float*)(patch_code + 0x1) = dpiscale_n;
             PgetDPI->hookedpart = *(__m128i*)patch_code;
             PgetDPI->func_addr = GI_Func->Func_getDPI;
@@ -2370,7 +2398,7 @@ __genshin_il:
                 Use_mobile_UI = 0;
 			}
 
-            if (Custom_DPI_Scale)
+            if (Get_DPI_Scale())
             {
                 address = (int64_t)PatternScan_Region(Copy_Text_VA, Text_Vsize, "0F 14 F8 E8 ?? ?? ?? ?? 0F 14 F0 0F 59 F7");
                 if (address)
