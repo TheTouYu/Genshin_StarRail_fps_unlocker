@@ -2113,10 +2113,9 @@ int main(/*int argc, char** argvA*/void)
 
     if (isGenshin && is_old_version == 0)
     {
-        // [h-timing] wait engine loaded (= anticheat driver init already passed), then inject
-        wprintf_s(L"Waiting engine modules...\n");
-        WaitForRemoteModule(pi->hProcess, L"UnityPlayer.dll", 240);
-        NtSleep(3000);
+        // [h-timing v2a] blind wait: do NOT touch game process while anticheat initializes
+        wprintf_s(L"Blind waiting 45s for anticheat init...\n");
+        NtSleep(45000);
         Unityplayer_baseAddr = RemoteDll_Inject(pi->hProcess, 0);
     }
     else
