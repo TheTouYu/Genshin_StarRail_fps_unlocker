@@ -1369,6 +1369,14 @@ static bool Init_Game_boot_arg(Boot_arg* arg)
                 }
             }
         }
+        // [h-v3] parse -attach anywhere in argv
+        for (int pi_ = 1; pi_ < argNum; pi_++)
+        {
+            if (_wcsicmp(argvW[pi_], L"-attach") == 0)
+            {
+                g_Attach = 1;
+            }
+        }
         for (int i = _game_argc_start; i < argNum; i++)
         {
             *temparg = argvW[i];
@@ -1997,6 +2005,8 @@ static void FullScreen()
 
 
 
+// [h-v3] attach mode flag
+static DWORD g_Attach = 0;
 int main(/*int argc, char** argvA*/void)
 {
     SetPriorityClass((HANDLE)-1, REALTIME_PRIORITY_CLASS);
@@ -2039,6 +2049,7 @@ int main(/*int argc, char** argvA*/void)
 
     {
     _wait_process_close:
+    if (g_Attach) goto __attach_skip_waitclose;
         DWORD pid = GetPID(procname->c_str());
         if (pid)
         {
@@ -2053,6 +2064,7 @@ int main(/*int argc, char** argvA*/void)
             goto _wait_process_close;
         }
     }
+__attach_skip_waitclose:
 
     if (isGenshin)
     {
@@ -2082,6 +2094,26 @@ int main(/*int argc, char** argvA*/void)
     }
     memset(boot_info, 0, bootsize);
 
+        if (g_Attach)
+    {
+        // [h-v3] attach: game already running (launched by launcher itself)
+        DWORD apid = GetPID(procname->c_str());
+        wprintf_s(L"[h-v3] attach mode, game pid=%lu\n", apid);
+        if (!apid)
+        {
+            Show_Error_Msg(L"[h-v3] game process not found for attach");
+            return 0;
+        }
+        pi->hProcess = OpenProcess_Internal(PROCESS_ALL_ACCESS, apid);
+        pi->dwProcessId = apid;
+        pi->hThread = NULL;
+        if (!pi->hProcess)
+        {
+            Show_Error_Msg(L"[h-v3] OpenProcess attach failed");
+            return 0;
+        }
+        goto __attach_inject_entry;
+    }
     if (!((CreateProcessW_pWin64)~(DWORD64)CreateProcessW_p)(ProcessPath->c_str(), (barg.Game_Arg), NULL, NULL, FALSE, GamePriorityClass, NULL, ProcessDir->c_str(), si, pi))
     {
         Show_Error_Msg(L"CreateProcess Fail!");
@@ -2111,11 +2143,12 @@ int main(/*int argc, char** argvA*/void)
         return 0;
     }
 
+__attach_inject_entry:
     if (isGenshin && is_old_version == 0)
     {
-        // [h-timing v2a] blind wait: do NOT touch game process while anticheat initializes
-        wprintf_s(L"Blind waiting 45s for anticheat init...\n");
-        NtSleep(45000);
+        // [h-v3] wait engine module (attach mode: safe to touch, driver already loaded)
+        wprintf_s(L"Waiting engine modules...\n");
+        WaitForRemoteModule(pi->hProcess, L"UnityPlayer.dll", 240);
         Unityplayer_baseAddr = RemoteDll_Inject(pi->hProcess, 0);
     }
     else
@@ -2530,7 +2563,7 @@ __Continue:
     
 	//SetThreadAffinityMask(pi->hThread, 0xF);
 	SetThreadPriority(pi->hThread, THREAD_PRIORITY_TIME_CRITICAL);
-    ResumeThread_Internal(pi->hThread);
+    if (pi->hThread) ResumeThread_Internal(pi->hThread);
     CloseHandle_Internal(pi->hThread);
     
     SetPriorityClass((HANDLE) -1, NORMAL_PRIORITY_CLASS);
