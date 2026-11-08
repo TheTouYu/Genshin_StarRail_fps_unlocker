@@ -1,4 +1,7 @@
-#define KEY_TOGGLE VK_END
+// [h-v3] attach mode flag
+static DWORD g_Attach = 0;
+
+﻿#define KEY_TOGGLE VK_END
 #define KEY_INCREASE VK_UP
 #define KEY_INCREASE_SMALL VK_RIGHT
 #define KEY_DECREASE VK_DOWN
@@ -2005,8 +2008,6 @@ static void FullScreen()
 
 
 
-// [h-v3] attach mode flag
-static DWORD g_Attach = 0;
 int main(/*int argc, char** argvA*/void)
 {
     SetPriorityClass((HANDLE)-1, REALTIME_PRIORITY_CLASS);
