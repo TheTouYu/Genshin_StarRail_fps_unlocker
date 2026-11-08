@@ -1637,6 +1637,63 @@ __exit_block:
 }
 
 //when DllPath is null return base img addr
+// [h-timing] poll remote PEB loader list until module appears (case-insensitive tail match)
+static BOOL WaitForRemoteModule(HANDLE Tar_handle, LPCWSTR ModName, DWORD TimeoutSec)
+{
+    DWORD waited = 0;
+    WCHAR lowName[64] = {0};
+    size_t nameLen = 0;
+    while (ModName[nameLen] && nameLen < 60) { lowName[nameLen] = ModName[nameLen]; nameLen++; }
+    _wcslwr(lowName);
+    while (waited < TimeoutSec * 1000)
+    {
+        PPEB64 peb_remote = GetProcessPEB(Tar_handle);
+        if (peb_remote)
+        {
+            ULONGLONG ldr_remote = 0;
+            if (ReadProcessMemoryInternal(Tar_handle, (PBYTE)peb_remote + 0x18, &ldr_remote, 8, 0) && ldr_remote)
+            {
+                PEB_LDR_DATA64 ldr = {0};
+                if (ReadProcessMemoryInternal(Tar_handle, (PVOID)ldr_remote, &ldr, sizeof(ldr), 0))
+                {
+                    ULONGLONG head_addr = (ULONGLONG)ldr_remote + 0x20;
+                    PMODULE_TABLE_ENTRY cur = (PMODULE_TABLE_ENTRY)ldr.InMemoryOrderModuleList.Flink;
+                    int guard = 0;
+                    while ((ULONGLONG)cur != head_addr && cur && guard < 128)
+                    {
+                        guard++;
+                        MODULE_TABLE_ENTRY entry = {0};
+                        if (!ReadProcessMemoryInternal(Tar_handle, cur, &entry, sizeof(entry), 0)) break;
+                        if (entry.FullDllName.Length && entry.FullDllName.Buffer)
+                        {
+                            WCHAR name[280] = {0};
+                            DWORD len = entry.FullDllName.Length < 556 ? entry.FullDllName.Length : 556;
+                            if (ReadProcessMemoryInternal(Tar_handle, entry.FullDllName.Buffer, name, len, 0))
+                            {
+                                _wcslwr(name);
+                                size_t nl = 0; while (name[nl]) nl++;
+                                if (nl >= nameLen)
+                                {
+                                    if (wcscmp(name + (nl - nameLen), lowName) == 0)
+                                    {
+                                        wprintf_s(L"[h-timing] module ready: %s\n", name);
+                                        return TRUE;
+                                    }
+                                }
+                            }
+                        }
+                        cur = (PMODULE_TABLE_ENTRY)entry.Next;
+                    }
+                }
+            }
+        }
+        NtSleep(500);
+        waited += 500;
+    }
+    wprintf_s(L"[h-timing] wait timeout for %s\n", ModName);
+    return FALSE;
+}
+
 static HMODULE RemoteDll_Inject(HANDLE Tar_handle, LPCWSTR DllPath)
 {
     size_t Pathsize = 0x2000;
@@ -2025,7 +2082,7 @@ int main(/*int argc, char** argvA*/void)
     }
     memset(boot_info, 0, bootsize);
 
-    if (!((CreateProcessW_pWin64)~(DWORD64)CreateProcessW_p)(ProcessPath->c_str(), (barg.Game_Arg), NULL, NULL, FALSE, CREATE_SUSPENDED | GamePriorityClass, NULL, ProcessDir->c_str(), si, pi))
+    if (!((CreateProcessW_pWin64)~(DWORD64)CreateProcessW_p)(ProcessPath->c_str(), (barg.Game_Arg), NULL, NULL, FALSE, GamePriorityClass, NULL, ProcessDir->c_str(), si, pi))
     {
         Show_Error_Msg(L"CreateProcess Fail!");
         return 0;
@@ -2056,6 +2113,10 @@ int main(/*int argc, char** argvA*/void)
 
     if (isGenshin && is_old_version == 0)
     {
+        // [h-timing] wait engine loaded (= anticheat driver init already passed), then inject
+        wprintf_s(L"Waiting engine modules...\n");
+        WaitForRemoteModule(pi->hProcess, L"UnityPlayer.dll", 240);
+        NtSleep(3000);
         Unityplayer_baseAddr = RemoteDll_Inject(pi->hProcess, 0);
     }
     else
