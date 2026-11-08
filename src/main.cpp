@@ -1,4 +1,4 @@
-#define KEY_TOGGLE VK_END
+﻿#define KEY_TOGGLE VK_END
 #define KEY_INCREASE VK_UP
 #define KEY_INCREASE_SMALL VK_RIGHT
 #define KEY_DECREASE VK_DOWN
@@ -2146,9 +2146,13 @@ __attach_skip_waitclose:
 __attach_inject_entry:
     if (isGenshin && is_old_version == 0)
     {
-        // [h-v3] wait engine module (attach mode: safe to touch, driver already loaded)
-        wprintf_s(L"Waiting engine modules...\n");
-        WaitForRemoteModule(pi->hProcess, L"UnityPlayer.dll", 240);
+        // [h-v4] 7.x Genshin embeds engine in YuanShen.exe (no UnityPlayer.dll module exists).
+        // Non-attach: blind-wait past anticheat init. Attach: caller already waited (sleep 30).
+        if (!g_Attach)
+        {
+            wprintf_s(L"Blind waiting 45s for anticheat init...\n");
+            NtSleep(45000);
+        }
         Unityplayer_baseAddr = RemoteDll_Inject(pi->hProcess, 0);
     }
     else
