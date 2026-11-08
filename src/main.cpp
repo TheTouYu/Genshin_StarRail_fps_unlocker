@@ -1,5 +1,3 @@
-// [h-v3] attach mode flag
-static DWORD g_Attach = 0;
 
 ﻿#define KEY_TOGGLE VK_END
 #define KEY_INCREASE VK_UP
@@ -1296,6 +1294,8 @@ struct Boot_arg
     LPWSTR Game_Arg;
     LPWSTR Path_Lib;
 };
+// [h-v3] attach mode flag
+static DWORD g_Attach = 0;
 //[out] CommandLinew
 //The first 16 bytes are used by other arg
 static bool Init_Game_boot_arg(Boot_arg* arg)
